@@ -1,78 +1,29 @@
 # syntax=docker/dockerfile:1
 
-#########################
-#       Build stage     #
-#########################
-FROM ubuntu:22.04 AS build
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
+ENV DISPLAY=:0 TZ=Etc/UTC
 
-# CA certs + guard against systemd upgrades
+# Install Xournal++ and noVNC stack
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates gnupg \
- && update-ca-certificates \
- && apt-mark hold systemd systemd-sysv || true
-
-# Toolchain & build deps
-# Notes:
-# - zlib1g-dev: required (CMake find_package(ZLIB REQUIRED))
-# - X11 dev headers: avoid link/cmake issues with Xi/Xext on Linux
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      build-essential cmake pkg-config git lsb-release gettext \
-      ninja-build \
-      libgtk-3-dev libpoppler-glib-dev libxml2-dev \
-      libsndfile1-dev liblua5.3-dev libzip-dev librsvg2-dev \
-      libgtksourceview-4-dev libqpdf-dev \
-      zlib1g-dev \
-      libx11-dev libxext-dev libxi-dev \
-      portaudio19-dev \
-      dvipng texlive texlive-latex-base texlive-pictures \
-      help2man doxygen graphviz \
- && rm -rf /var/lib/apt/lists/*
-
-# Ensure git uses the system CA bundle
-ENV GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt
-RUN git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt
-
-WORKDIR /app
-COPY . /app
-
-# Configure & build (disable audio + manpages, use Ninja)
-# Also dump CMakeError.log/CMakeOutput.log if configure fails
-RUN set -eux; \
- mkdir -p build; cd build; \
- cmake .. \
-   -DCMAKE_BUILD_TYPE=Release \
-   -DENABLE_AUDIO=OFF \
-   -DBUILD_MANPAGES=OFF \
-   -G Ninja \
- || { echo '--- CMakeError.log ---' && cat CMakeFiles/CMakeError.log || true; \
-      echo '--- CMakeOutput.log ---' && cat CMakeFiles/CMakeOutput.log || true; \
-      exit 1; }; \
- ninja; \
- ninja install DESTDIR=/tmp/install
-
-#########################
-#     Runtime stage     #
-#########################
-FROM ubuntu:22.04 AS runtime
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Runtime libs (qpdf, gtksourceview, etc.)
-RUN apt-get update \
- && apt-mark hold systemd systemd-sysv || true \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
-      libgtk-3-0 libpoppler-glib8 libxml2 \
-      libsndfile1 liblua5.3-0 libzip4 librsvg2-2 \
-      libgtksourceview-4-0 qpdf \
+      xournalpp \
+      xvfb x11vnc fluxbox \
+      novnc websockify \
  && update-ca-certificates \
+ && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html \
  && rm -rf /var/lib/apt/lists/*
 
-# Bring in built artifacts
-COPY --from=build /tmp/install/ /
+WORKDIR /usr/share/novnc
+EXPOSE 12055
 
-# Default command
-CMD ["xournalpp"]
+# Start X server, WM, VNC, websockify, then Xournal++
+CMD bash -lc '\
+  Xvfb :0 -screen 0 1280x800x16 & \
+  fluxbox & \
+  x11vnc -display :0 -forever -shared -nopw -rfbport 5900 & \
+  websockify --web /usr/share/novnc 12055 localhost:5900 & \
+  exec xournalpp'
 
 
