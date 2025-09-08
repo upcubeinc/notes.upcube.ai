@@ -6,6 +6,6 @@ services:
     container_name: xournalpp
     restart: unless-stopped
     ports:
-      - "5900:5900"   # VNC port
+      - "5914:5900"   # VNC port
     volumes:
       - ./data:/root/.xournalpp
