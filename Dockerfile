@@ -12,7 +12,7 @@ RUN apt-get update \
  && update-ca-certificates \
  && apt-mark hold systemd systemd-sysv || true
 
-# Toolchain & headers (+ qpdf & gtksourceview for CMake)
+# Toolchain & build deps (from Xournal++ LinuxBuild.md)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential cmake pkg-config git lsb-release gettext \
@@ -20,6 +20,9 @@ RUN apt-get update \
       libgtk-3-dev libpoppler-glib-dev libxml2-dev \
       libsndfile1-dev liblua5.3-dev libzip-dev librsvg2-dev \
       libgtksourceview-4-dev libqpdf-dev \
+      portaudio19-dev \
+      dvipng texlive texlive-latex-base texlive-pictures \
+      help2man doxygen graphviz \
  && rm -rf /var/lib/apt/lists/*
 
 # Ensure git uses the system CA bundle
@@ -47,7 +50,7 @@ RUN mkdir -p build \
 FROM ubuntu:22.04 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Runtime libs (include qpdf & gtksourceview) + CA certs
+# Runtime libs (qpdf, gtksourceview, etc.)
 RUN apt-get update \
  && apt-mark hold systemd systemd-sysv || true \
  && apt-get install -y --no-install-recommends \
@@ -63,3 +66,4 @@ COPY --from=build /tmp/install/ /
 
 # Default command
 CMD ["xournalpp"]
+
