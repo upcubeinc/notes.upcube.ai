@@ -5,7 +5,15 @@ services:
     build: .
     container_name: xournalpp
     restart: unless-stopped
-    ports:
-      - "5914:5900"   # VNC port
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.notes.rule=Host(`notes.upcube.ai`)"
+      - "traefik.http.routers.notes.entrypoints=websecure"
+      - "traefik.http.routers.notes.tls.certresolver=letsencrypt"
     volumes:
       - ./data:/root/.xournalpp
+    ports:
+      - "5900:5900"   # VNC access
+      - "8080:8080"   # noVNC web access
+
