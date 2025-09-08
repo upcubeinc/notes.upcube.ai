@@ -3,7 +3,6 @@ version: "3.8"
 services:
   xournalpp:
     build: .
-    container_name: xournalpp
     restart: unless-stopped
     labels:
       - "coolify.managed=true"
@@ -16,4 +15,5 @@ services:
     ports:
       - "5900:5900"   # VNC access
       - "8080:8080"   # noVNC web access
+
 
