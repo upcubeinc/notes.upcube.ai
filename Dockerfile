@@ -6,7 +6,7 @@
 FROM ubuntu:22.04 AS build
 ENV DEBIAN_FRONTEND=noninteractive
 
-# CA certs (for git/FetchContent) + guard against systemd upgrades in containers
+# CA certs + guard against systemd upgrades
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates gnupg \
  && update-ca-certificates \
@@ -16,6 +16,7 @@ RUN apt-get update \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential cmake pkg-config git lsb-release gettext \
+      ninja-build \
       libgtk-3-dev libpoppler-glib-dev libxml2-dev \
       libsndfile1-dev liblua5.3-dev libzip-dev librsvg2-dev \
       libgtksourceview-4-dev libqpdf-dev \
@@ -28,14 +29,16 @@ RUN git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt
 WORKDIR /app
 COPY . /app
 
-# Configure & build (audio disabled to avoid portaudiocpp)
+# Configure & build (disable audio + manpages, use Ninja)
 RUN mkdir -p build \
  && cd build \
  && cmake .. \
       -DCMAKE_BUILD_TYPE=Release \
       -DENABLE_AUDIO=OFF \
- && make -j"$(nproc)" \
- && make install DESTDIR=/tmp/install
+      -DBUILD_MANPAGES=OFF \
+      -G Ninja \
+ && ninja \
+ && ninja install DESTDIR=/tmp/install
 
 
 #########################
@@ -44,7 +47,7 @@ RUN mkdir -p build \
 FROM ubuntu:22.04 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Runtime libs (include qpdf & gtksourceview) + CA certs; avoid systemd upgrades
+# Runtime libs (include qpdf & gtksourceview) + CA certs
 RUN apt-get update \
  && apt-mark hold systemd systemd-sysv || true \
  && apt-get install -y --no-install-recommends \
@@ -58,14 +61,5 @@ RUN apt-get update \
 # Bring in built artifacts
 COPY --from=build /tmp/install/ /
 
-# Default command (override as needed)
+# Default command
 CMD ["xournalpp"]
-
-
-
-
-
-
-
-
-
