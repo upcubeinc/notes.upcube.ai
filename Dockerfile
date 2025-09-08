@@ -1,46 +1,57 @@
 # ---------- Build stage ----------
 FROM ubuntu:22.04 AS build
-ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-mark hold systemd systemd-sysv && \
-    apt-get install -y --no-install-recommends \
-      ca-certificates \
-      git \
-      gettext \
-      build-essential cmake pkg-config \
-      lsb-release \
-      libgtk-3-dev libpoppler-glib-dev libxml2-dev \
-      libsndfile1-dev liblua5.3-dev libzip-dev \
-      librsvg2-dev \
-    && update-ca-certificates \
-    && git config --system http.sslCAInfo /etc/ssl/certs/ca-certificates.crt \
-    && rm -rf /var/lib/apt/lists/*
+# Base SSL + keep systemd from fiddling
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates gnupg \
+ && update-ca-certificates \
+ && apt-mark hold systemd systemd-sysv || true
+
+# Build dependencies (adds gettext + librsvg2-dev + others you used)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    build-essential cmake pkg-config git lsb-release gettext \
+    libgtk-3-dev libpoppler-glib-dev libxml2-dev \
+    libsndfile1-dev liblua5.3-dev libzip-dev librsvg2-dev \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . /app
 
-# Build
-RUN mkdir build && cd build && cmake .. && make -j"$(nproc)" && make install
+# Make sure git uses proper CA bundle (paranoia, but harmless)
+RUN git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt
 
+# Build
+RUN mkdir -p build \
+ && cd build \
+ && cmake .. -DCMAKE_BUILD_TYPE=Release \
+ && make -j"$(nproc)" \
+ && make install DESTDIR=/tmp/install
 
 # ---------- Runtime stage ----------
 FROM ubuntu:22.04 AS runtime
-ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-mark hold systemd systemd-sysv && \
-    apt-get install -y --no-install-recommends \
-      libgtk-3-0 libpoppler-glib8 libxml2 \
-      libsndfile1 liblua5.3-0 libzip4 \
-      librsvg2-2 \
-      xvfb x11vnc fluxbox \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime libs + hold systemd too
+RUN apt-get update \
+ && apt-mark hold systemd systemd-sysv || true \
+ && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libgtk-3-0 libpoppler-glib8 libxml2 \
+    libsndfile1 liblua5.3-0 libzip4 librsvg2-2 \
+ && update-ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /usr/local /usr/local
+# If you actually need a headless GUI + VNC, uncomment:
+# RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc fluxbox && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 5900
-CMD ["bash","-c","Xvfb :0 -screen 0 1024x768x16 & fluxbox & x11vnc -display :0 -forever -nopw -listen 0.0.0.0 -rfbport 5900 & xournalpp"]
+# Bring in the installed files from the build
+COPY --from=build /tmp/install/ /
+
+# Set the default entrypoint/binary (adjust if your binary name differs)
+# ENTRYPOINT ["/usr/local/bin/xournalpp"]
+
 
 
 
