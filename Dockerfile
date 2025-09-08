@@ -12,22 +12,23 @@ RUN apt-get update \
  && update-ca-certificates \
  && apt-mark hold systemd systemd-sysv || true
 
-# Toolchain & headers (audio disabled, so no portaudiocpp needed)
+# Toolchain & headers (+ qpdf & gtksourceview for CMake)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential cmake pkg-config git lsb-release gettext \
       libgtk-3-dev libpoppler-glib-dev libxml2-dev \
       libsndfile1-dev liblua5.3-dev libzip-dev librsvg2-dev \
+      libgtksourceview-4-dev libqpdf-dev \
  && rm -rf /var/lib/apt/lists/*
 
-# Ensure git uses the system CA bundle to avoid "CAfile: none"
+# Ensure git uses the system CA bundle
 ENV GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt
 RUN git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /app
 COPY . /app
 
-# Configure & build (disable audio to avoid portaudiocpp requirement)
+# Configure & build (audio disabled to avoid portaudiocpp)
 RUN mkdir -p build \
  && cd build \
  && cmake .. \
@@ -43,13 +44,14 @@ RUN mkdir -p build \
 FROM ubuntu:22.04 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Runtime libs + CA certs; avoid systemd upgrades
+# Runtime libs (include qpdf & gtksourceview) + CA certs; avoid systemd upgrades
 RUN apt-get update \
  && apt-mark hold systemd systemd-sysv || true \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
       libgtk-3-0 libpoppler-glib8 libxml2 \
       libsndfile1 liblua5.3-0 libzip4 librsvg2-2 \
+      libgtksourceview-4-0 qpdf \
  && update-ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
@@ -58,6 +60,7 @@ COPY --from=build /tmp/install/ /
 
 # Default command (override as needed)
 CMD ["xournalpp"]
+
 
 
 
