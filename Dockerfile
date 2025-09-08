@@ -12,7 +12,10 @@ RUN apt-get update \
  && update-ca-certificates \
  && apt-mark hold systemd systemd-sysv || true
 
-# Toolchain & build deps (from Xournal++ LinuxBuild.md)
+# Toolchain & build deps
+# Notes:
+# - zlib1g-dev: required (CMake find_package(ZLIB REQUIRED))
+# - X11 dev headers: avoid link/cmake issues with Xi/Xext on Linux
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential cmake pkg-config git lsb-release gettext \
@@ -20,6 +23,8 @@ RUN apt-get update \
       libgtk-3-dev libpoppler-glib-dev libxml2-dev \
       libsndfile1-dev liblua5.3-dev libzip-dev librsvg2-dev \
       libgtksourceview-4-dev libqpdf-dev \
+      zlib1g-dev \
+      libx11-dev libxext-dev libxi-dev \
       portaudio19-dev \
       dvipng texlive texlive-latex-base texlive-pictures \
       help2man doxygen graphviz \
@@ -33,16 +38,19 @@ WORKDIR /app
 COPY . /app
 
 # Configure & build (disable audio + manpages, use Ninja)
-RUN mkdir -p build \
- && cd build \
- && cmake .. \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DENABLE_AUDIO=OFF \
-      -DBUILD_MANPAGES=OFF \
-      -G Ninja \
- && ninja \
- && ninja install DESTDIR=/tmp/install
-
+# Also dump CMakeError.log/CMakeOutput.log if configure fails
+RUN set -eux; \
+ mkdir -p build; cd build; \
+ cmake .. \
+   -DCMAKE_BUILD_TYPE=Release \
+   -DENABLE_AUDIO=OFF \
+   -DBUILD_MANPAGES=OFF \
+   -G Ninja \
+ || { echo '--- CMakeError.log ---' && cat CMakeFiles/CMakeError.log || true; \
+      echo '--- CMakeOutput.log ---' && cat CMakeFiles/CMakeOutput.log || true; \
+      exit 1; }; \
+ ninja; \
+ ninja install DESTDIR=/tmp/install
 
 #########################
 #     Runtime stage     #
@@ -66,4 +74,5 @@ COPY --from=build /tmp/install/ /
 
 # Default command
 CMD ["xournalpp"]
+
 
