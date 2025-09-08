@@ -13,7 +13,7 @@ services:
     volumes:
       - ./data:/root/.xournalpp
     ports:
-      - "5900:5900"   # VNC access
-      - "8080:8080"   # noVNC web access
+      - "5900:5900"   # VNC client access
+
 
 
